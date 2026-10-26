@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<title>hush</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cpath d=%22M4 52 L24 22 L33 34 L42 18 L60 52Z%22 fill=%22%23e8eef5%22/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="veil"></div>
+
+<div id="title" class="show">
+  <div class="mark">
+    <div class="name">hush</div>
+    <div class="sub">an endless mountain</div>
+  </div>
+  <div class="cta"><span id="cta">finding the snow</span></div>
+  <div class="keys">
+    <span><b>&larr; &rarr;</b> carve</span>
+    <span><b>&uarr;</b> tuck</span>
+    <span><b>&darr;</b> slow</span>
+    <span><b>space</b> hold &amp; release to pop</span>
+    <span><b>esc</b> settings</span>
+  </div>
+</div>
+
+<div id="hud">
+  <div id="clock"><span id="tod">golden hour</span><span class="dot">·</span><span id="hhmm">17:12</span></div>
+  <div id="speed"><span id="kmh">0</span><small>km/h</small></div>
+  <div id="dist"><span id="km">0.0</span><small>km</small></div>
+  <div id="toasts"></div>
+  <div id="hint"></div>
+</div>
+
+<div id="menu">
+  <div class="panel">
+    <div class="head">
+      <div class="mname">hush</div>
+      <button id="resume">resume</button>
+    </div>
+    <div class="row">
+      <label>time of day</label>
+      <div class="chips" id="todChips">
+        <button data-tod="6.4">dawn</button>
+        <button data-tod="11.5">day</button>
+        <button data-tod="17.2">golden</button>
+        <button data-tod="18.6">dusk</button>
+        <button data-tod="22.5">night</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>let time pass</label>
+      <div class="chips" id="flowChips"><button data-flow="1">on</button><button data-flow="0">off</button></div>
+    </div>
+    <div class="row">
+      <label>weather</label>
+      <div class="chips" id="wxChips"><button data-wx="0">clear</button><button data-wx="0.45">hazy</button><button data-wx="1">snowing</button></div>
+    </div>
+    <div class="row">
+      <label>camera</label>
+      <div class="chips" id="camChips"><button data-cam="chase">follow</button><button data-cam="cine">cinematic</button><button data-cam="drone">drone</button></div>
+    </div>
+    <div class="row">
+      <label>jacket</label>
+      <div class="chips swatches" id="kitChips"></div>
+    </div>
+    <div class="row">
+      <label>music</label>
+      <div class="chips" id="musChips"><button data-mus="1">on</button><button data-mus="0">off</button></div>
+    </div>
+    <div class="row">
+      <label>picture</label>
+      <div class="chips" id="qChips"><button data-q="low">light</button><button data-q="med">balanced</button><button data-q="high">rich</button></div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="foot">
+      <span><b>c</b> camera</span><span><b>t</b> time</span><span><b>p</b> photo mode</span><span><b>m</b> music</span><span><b>r</b> new line</span>
+    </div>
+  </div>
+</div>
+
+<div id="photo"><span>photo mode</span> · drag to orbit · scroll to zoom · <b>[ ]</b> move the sun · <b>p</b> back</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
