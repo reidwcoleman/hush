@@ -1,0 +1,11 @@
+import { chromium } from 'playwright-core';
+import { CHROME, ARGS } from './chrome.mjs';
+import fs from 'node:fs';
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ARGS });
+const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
+await page.goto('http://127.0.0.1:5290/?fixdpr=1&q=low&auto=1&menu=0', { waitUntil: 'domcontentloaded' });
+await page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
+await page.addScriptTag({ content: fs.readFileSync('/tmp/claude-501/trace.js', 'utf8') });
+await page.waitForTimeout(75000);
+console.log(JSON.stringify(await page.evaluate(() => window.__wipes), null, 0));
+await browser.close();

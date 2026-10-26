@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { AT, patchAtmos } from './atmos.js';
 import { boughTexture, barkTexture } from './textures.js';
 import { CHUNK } from './terrain.js';
+import { normalAt } from './world.js';
 
 const rad = (h) => 0.3 * Math.pow(1 - h, 0.95) + 0.018;
 
@@ -61,8 +62,8 @@ function spruceGeometry() {
   boughs.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
   boughs.setAttribute('aSway', new THREE.Float32BufferAttribute(S, 1));
   boughs.setIndex(I);
-  const trunk = new THREE.CylinderGeometry(0.008, 0.028, 1.0, 7, 1, true);
-  trunk.translate(0, 0.5, 0);
+  const trunk = new THREE.CylinderGeometry(0.006, 0.028, 0.86, 7, 1, true);
+  trunk.translate(0, 0.43, 0);
   trunk.setAttribute('aSway', new THREE.Float32BufferAttribute(new Float32Array(trunk.attributes.position.count), 1));
   // a dense core so you never see daylight through the middle
   const core = coneSpruce(9, 16, 5);
@@ -231,13 +232,29 @@ function rockMaterial(tex) {
   return m;
 }
 
-const NEAR_R = 170, MID_R = 650, FAR_R = 1500;
+// the dip and the shade round a tree's foot
+function wellTexture() {
+  const S = 128;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  const gr = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  gr.addColorStop(0, 'rgba(255,255,255,0.75)');
+  gr.addColorStop(0.35, 'rgba(255,255,255,0.5)');
+  gr.addColorStop(0.7, 'rgba(255,255,255,0.14)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  return new THREE.CanvasTexture(cv);
+}
+
+const NEAR_R = 170, MID_R = 560, FAR_R = 1500;
 const MAX_NEAR = 4000, MAX_MID = 20000, MAX_FAR = 26000, MAX_ROCK = 3000;
 
 export class Props {
   constructor(scene, origin, tex) {
     this.origin = origin;
-    this.lists = new Map(); // chunk key -> { trees, rocks }
+    this.lists = new Map(); // chunk key -> { trees, rocks, cells }
+    this.cells = new Map();
     const bough = boughTexture(), bark = barkTexture();
     const t = { ...tex, bough };
     this.near = new THREE.InstancedMesh(spruceGeometry(), [
@@ -245,10 +262,19 @@ export class Props {
       treeMaterial('near', t),
       treeMaterial('mid', t),
     ], MAX_NEAR);
-    this.mid = new THREE.InstancedMesh(coneSpruce(5, 10), treeMaterial('mid', t), MAX_MID);
+    this.mid = new THREE.InstancedMesh(coneSpruce(4, 8, 3), treeMaterial('mid', t), MAX_MID);
     this.farT = new THREE.InstancedMesh(coneSpruce(2, 6), treeMaterial('far', t), MAX_FAR);
     this.rocks = new THREE.InstancedMesh(rockGeometry(3), rockMaterial(tex), MAX_ROCK);
-    for (const m of [this.near, this.mid, this.farT, this.rocks]) {
+    const wellGeo = new THREE.PlaneGeometry(1, 1);
+    wellGeo.rotateX(-Math.PI / 2);
+    const wellMat = new THREE.MeshStandardMaterial({ color: 0x5d6f8c, alphaMap: wellTexture(), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 });
+    wellMat.onBeforeCompile = patchAtmos;
+    this.wells = new THREE.InstancedMesh(wellGeo, wellMat, MAX_NEAR);
+    this.wells.receiveShadow = true;
+    this.wells.renderOrder = 1;
+    this._n = { x: 0, y: 1, z: 0 };
+    this._up = new THREE.Vector3();
+    for (const m of [this.near, this.mid, this.farT, this.rocks, this.wells]) {
       m.count = 0;
       m.frustumCulled = false;
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -265,8 +291,26 @@ export class Props {
     this._y = new THREE.Vector3(0, 1, 0);
   }
 
-  add(key, trees, rocks) { this.lists.set(key, { trees, rocks }); this.dirty = true; }
-  remove(key) { this.lists.delete(key); this.dirty = true; }
+  add(key, trees, rocks) {
+    // a 12 m hash grid of obstacles for the collision and look-ahead queries
+    const cells = [];
+    const put = (o) => {
+      const ck = Math.floor(o.x / 12) + ',' + Math.floor(o.z / 12);
+      let c = this.cells.get(ck);
+      if (!c) { c = []; this.cells.set(ck, c); cells.push(ck); }
+      c.push(o);
+    };
+    for (let k = 0; k < trees.length; k += 5) put({ kind: 'tree', x: trees[k], y: trees[k + 1], z: trees[k + 2], s: trees[k + 3], r: 0.35 + 0.35 * trees[k + 3] });
+    for (let k = 0; k < rocks.length; k += 5) put({ kind: 'rock', x: rocks[k], y: rocks[k + 1] + rocks[k + 3] * 0.55, z: rocks[k + 2], s: rocks[k + 3], r: rocks[k + 3] * 0.9 });
+    this.lists.set(key, { trees, rocks, cells });
+    this.dirty = true;
+  }
+  remove(key) {
+    const L = this.lists.get(key);
+    if (L) for (const ck of L.cells) this.cells.delete(ck);
+    this.lists.delete(key);
+    this.dirty = true;
+  }
 
   setTree(mesh, i, x, y, z, s, seed, widen = 1) {
     const H = 14 * s;
@@ -302,14 +346,25 @@ export class Props {
         const x = trees[i], z = trees[i + 2];
         const d = Math.hypot(x - ax, z - az);
         if (d < NEAR_R) {
-          if (nn < MAX_NEAR) this.setTree(this.near, nn++, x, trees[i + 1], z, trees[i + 3], trees[i + 4]);
+          if (nn < MAX_NEAR) {
+            this.setTree(this.near, nn, x, trees[i + 1], z, trees[i + 3], trees[i + 4]);
+            // the well, tilted to the slope
+            normalAt(x, z, this._n, 1.5);
+            this._q.setFromUnitVectors(this._y, this._up.set(this._n.x, this._n.y, this._n.z));
+            const R = 14 * trees[i + 3] * 0.62;
+            this._s.set(R, 1, R);
+            this._p.set(x - o.x, trees[i + 1] - o.y + 0.03, z - o.z);
+            this._m.compose(this._p, this._q, this._s);
+            this.wells.setMatrixAt(nn, this._m);
+            nn++;
+          }
         } else if (!doMid) continue;
         else if (d < MID_R) {
           if (nm < MAX_MID) this.setTree(this.mid, nm++, x, trees[i + 1], z, trees[i + 3], trees[i + 4]);
         } else if (d < FAR_R) {
           const sd = trees[i + 4];
-          if (d > 1000 && sd > 0.6) continue;
-          if (nf < MAX_FAR) this.setTree(this.farT, nf++, x, trees[i + 1], z, trees[i + 3], sd, d > 1000 ? 1.2 : 1);
+          if (d > 900 && sd > 0.55) continue;
+          if (nf < MAX_FAR) this.setTree(this.farT, nf++, x, trees[i + 1], z, trees[i + 3], sd, d > 900 ? 1.2 : 1);
         }
       }
       if (doMid) for (let i = 0; i < rocks.length; i += 5) {
@@ -325,6 +380,8 @@ export class Props {
     }
     this.near.count = nn;
     this.near.instanceMatrix.needsUpdate = true;
+    this.wells.count = nn;
+    this.wells.instanceMatrix.needsUpdate = true;
     if (this.near.instanceColor) this.near.instanceColor.needsUpdate = true;
     if (doMid) {
       this.mid.count = nm; this.farT.count = nf; this.rocks.count = nr;
@@ -335,30 +392,18 @@ export class Props {
     }
   }
 
-  // the nearest trunk or boulder to an absolute point: { d, kind, x, z, r }
+  // the nearest trunk or boulder to an absolute point: { d, kind, x, z, r, y, s }
   nearest(ax, az) {
-    const ci = Math.floor(ax / CHUNK), cj = Math.floor(az / CHUNK);
-    let best = null;
+    const ci = Math.floor(ax / 12), cj = Math.floor(az / 12);
+    let best = null, bd = 1e9;
     for (let j = cj - 1; j <= cj + 1; j++) for (let i = ci - 1; i <= ci + 1; i++) {
-      const L = this.lists.get(i + ',' + j);
-      if (!L) continue;
-      const t = L.trees;
-      for (let k = 0; k < t.length; k += 5) {
-        const dx = t[k] - ax, dz = t[k + 2] - az;
-        if (Math.abs(dx) > 12 || Math.abs(dz) > 12) continue;
-        const r = 0.35 + 0.35 * t[k + 3];
-        const d = Math.hypot(dx, dz) - r;
-        if (!best || d < best.d) best = { d, kind: 'tree', x: t[k], z: t[k + 2], r, y: t[k + 1], s: t[k + 3] };
-      }
-      const rk = L.rocks;
-      for (let k = 0; k < rk.length; k += 5) {
-        const dx = rk[k] - ax, dz = rk[k + 2] - az;
-        if (Math.abs(dx) > 12 || Math.abs(dz) > 12) continue;
-        const r = rk[k + 3] * 0.9;
-        const d = Math.hypot(dx, dz) - r;
-        if (!best || d < best.d) best = { d, kind: 'rock', x: rk[k], z: rk[k + 2], r, y: rk[k + 1] + rk[k + 3] * 0.55, s: rk[k + 3] };
+      const c = this.cells.get(i + ',' + j);
+      if (!c) continue;
+      for (const o of c) {
+        const d = Math.hypot(o.x - ax, o.z - az) - o.r;
+        if (d < bd) { bd = d; best = o; }
       }
     }
-    return best;
+    return best ? { ...best, d: bd } : null;
   }
 }

@@ -108,9 +108,7 @@ export function dotTexture() {
   cv.width = cv.height = S;
   const g = cv.getContext('2d');
   const gr = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
-  gr.addColorStop(0, 'rgba(255,255,255,1)');
-  gr.addColorStop(0.35, 'rgba(255,255,255,0.55)');
-  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  for (let i = 0; i <= 8; i++) { const r = i / 8; gr.addColorStop(r, `rgba(255,255,255,${Math.exp(-r * r * 4.5).toFixed(3)})`); }
   g.fillStyle = gr; g.fillRect(0, 0, S, S);
   const t = new THREE.CanvasTexture(cv);
   return t;

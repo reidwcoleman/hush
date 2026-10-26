@@ -26,7 +26,7 @@ void main() {
   vec3 V = normalize( vW - cameraPosition );
   float fwd = pow( max( dot( V, uSunDir ), 0.0 ), 6.0 );
   vec3 col = uAmb * 0.9 + uSunCol * ( 0.18 + 1.6 * fwd );
-  float a = t.a * smoothstep( 0.0, 0.5, vLife ) * 0.22 * ( 0.6 + 0.4 * vSeed );
+  float a = t.a * smoothstep( 0.0, 0.6, vLife ) * 0.15 * ( 0.6 + 0.4 * vSeed );
   gl_FragColor = vec4( atmosFog( col, vW ), a );
 }`;
 
@@ -209,7 +209,7 @@ void main() {
   vA = ( dust > 0.5 ? uDust : uSnow ) * smoothstep( uBox * 0.5, uBox * 0.25, d ) * smoothstep( 0.3, 1.5, d );
   vDust = dust;
   vTw = aSeed.z;
-  gl_PointSize = ( dust > 0.5 ? 0.012 : 0.05 + aSeed.y * 0.04 ) * uScale / max( 0.3, d );
+  gl_PointSize = ( dust > 0.5 ? 0.012 : 0.07 + aSeed.y * 0.06 ) * uScale / max( 0.3, d );
 }`;
 const AIR_FRAG = /* glsl */ `
 uniform sampler2D uDot; uniform vec3 uSunCol, uAmb, uSunDir; uniform float uTime;
@@ -217,8 +217,8 @@ varying float vA; varying float vDust; varying float vTw;
 void main() {
   if ( vA <= 0.001 ) discard;
   vec4 t = texture2D( uDot, gl_PointCoord );
-  vec3 col = uAmb + uSunCol * 0.35;
-  float a = t.a * vA;
+  vec3 col = uAmb * 1.25 + uSunCol * 0.35;
+  float a = t.a * vA * 0.9;
   if ( vDust > 0.5 ) {
     float g = pow( 0.5 + 0.5 * sin( uTime * ( 3.0 + vTw * 9.0 ) + vTw * 60.0 ), 24.0 );
     col = uSunCol * ( 0.2 + 5.0 * g );

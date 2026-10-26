@@ -53,15 +53,22 @@ void main() {
   if ( uEnv < 0.5 ) {
     // stars and the milky way
     if ( uStars > 0.001 ) {
-      vec3 sp = d * 420.0;
-      vec3 h = hash3i( floor( sp ) );
-      float r = length( fract( sp ) - 0.25 - h * 0.5 );
-      float tw = 0.75 + 0.25 * sin( uTime * ( 2.0 + h.y * 4.0 ) + h.z * 40.0 );
-      float star = step( 0.9965, h.x ) * smoothstep( 0.22, 0.0, r ) * ( 0.3 + 2.4 * pow( h.y, 6.0 ) ) * tw;
+      float star = 0.0;
       vec3 band = normalize( vec3( 0.55, 0.35, -0.76 ) );
-      float mw = exp( -pow( dot( d, band ), 2.0 ) * 22.0 );
+      float mw = exp( -pow( dot( d, band ), 2.0 ) * 14.0 );
+      // two layers: many faint, a few bright; thicker along the milky way
+      for ( int L = 0; L < 2; L++ ) {
+        vec3 sp = d * ( L == 0 ? 520.0 : 260.0 );
+        vec3 h = hash3i( floor( sp ) + float( L ) * 1000.0 );
+        float r = length( fract( sp ) - 0.25 - h * 0.5 );
+        float tw = 0.7 + 0.3 * sin( uTime * ( 2.0 + h.y * 5.0 ) + h.z * 40.0 );
+        float thr = L == 0 ? 0.985 - mw * 0.03 : 0.9975;
+        star += step( thr, h.x ) * smoothstep( 0.25, 0.0, r ) * ( L == 0 ? 0.35 + h.y * 0.5 : 1.2 + 3.0 * pow( h.y, 4.0 ) ) * tw;
+      }
       float mwn = texture2D( uNoise, d.xz * 1.7 + d.y ).r * 0.6 + texture2D( uNoise, d.xy * 4.0 ).g * 0.4;
-      col += ( vec3( 0.75, 0.82, 1.0 ) * star + vec3( 0.20, 0.22, 0.30 ) * mw * smoothstep( 0.35, 0.8, mwn ) * 0.18 ) * uStars * smoothstep( 0.0, 0.15, yy );
+      float dust = texture2D( uNoise, d.xz * 6.0 ).b;
+      vec3 milky = vec3( 0.22, 0.24, 0.32 ) * mw * smoothstep( 0.3, 0.75, mwn ) * ( 0.6 + 0.6 * dust ) * 0.45;
+      col += ( vec3( 0.78, 0.84, 1.0 ) * star + milky ) * uStars * smoothstep( 0.0, 0.12, yy );
       // the moon
       float mm = dot( d, uMoonDir );
       col += vec3( 0.9, 0.93, 1.0 ) * ( smoothstep( 0.99985, 0.99991, mm ) * 9.0 + pow( max( mm, 0.0 ), 600.0 ) * 0.25 + pow( max( mm, 0.0 ), 40.0 ) * 0.03 ) * uStars;

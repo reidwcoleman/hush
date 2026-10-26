@@ -31,7 +31,8 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.2, 40000);
 scene.add(camera);
 
-let quality = Q.get('q') ?? store.get('quality', 'med');
+const COARSE = matchMedia('(pointer: coarse)').matches;
+let quality = Q.get('q') ?? store.get('quality', COARSE ? 'low' : 'med');
 const QDPR = { low: 0.75, med: 1, high: 1.5 };
 let dprScale = 1;
 function dpr() { return Math.min(window.devicePixelRatio || 1, QDPR[quality] ?? 1) * dprScale; }
@@ -197,17 +198,29 @@ function autopilot(dt) {
   const ax = p.x + ORIGIN.x, az = p.z + ORIGIN.z;
   const off = ax - lineX(az);
   want -= THREE.MathUtils.clamp(off / 300, -0.6, 0.6);
-  // look ahead for trees and rocks
+  // look ahead for trees and rocks: carve the arc toward each candidate heading and keep the
+  // clear one nearest the heading it wants
   const sp = Math.max(6, skier.vel.length());
-  for (const look of [0.6, 1.1, 1.7]) {
-    const lx = ax + Math.sin(skier.yaw) * sp * look, lz = az + Math.cos(skier.yaw) * sp * look;
-    const hit = props.nearest(lx, lz);
-    if (hit && hit.d < 2.5) {
-      const side = (hit.x - lx) * Math.cos(skier.yaw) - (hit.z - lz) * Math.sin(skier.yaw);
-      want += side > 0 ? -0.9 : 0.9;
-      break;
+  const wR = sp / 9;
+  let best = null, bestCost = 1e9;
+  for (let off = -1.4; off <= 1.41; off += 0.2) {
+    const hd = skier.yaw + off;
+    let x = ax, z = az, h = skier.yaw, clear = true;
+    for (let t = 0; t < 2.2 && clear; t += 0.15) {
+      const dh = Math.atan2(Math.sin(hd - h), Math.cos(hd - h));
+      h += Math.sign(dh) * Math.min(Math.abs(dh), wR * 0.15);
+      x += Math.sin(h) * sp * 0.15; z += Math.cos(h) * sp * 0.15;
+      const hit = props.nearest(x, z);
+      if (hit && hit.d < 1.8) clear = false;
+      const cab = cabins.near(x, z);
+      if (cab && cab.d < 3) clear = false;
     }
+    if (!clear) continue;
+    const cost = Math.abs(Math.atan2(Math.sin(hd - want), Math.cos(hd - want)));
+    if (cost < bestCost) { bestCost = cost; best = hd; }
   }
+  if (best === null) return { steer: 0, tuck: false, brake: true, jump: false, grab: false };
+  want = best;
   const diff = Math.atan2(Math.sin(want - skier.yaw), Math.cos(want - skier.yaw));
   return { steer: THREE.MathUtils.clamp(diff * 2.2, -1, 1), tuck: sp < 4.5, brake: sp > 24, jump: false, grab: false };
 }
@@ -442,7 +455,7 @@ function emitSpray(dt) {
   const R = rider;
   const sp = skier.speed;
   const pw = skier.powder;
-  const rate = sp * (skier.carve * 14 + pw * 9 + 2) + skier.skid * 40 + skier.brake * sp * 30;
+  const rate = sp * (skier.carve * 26 + pw * 16 + 3) + skier.skid * 70 + skier.brake * sp * 50;
   let n = rate * dt;
   const whole = Math.floor(n) + (Math.random() < n % 1 ? 1 : 0);
   if (!whole) return;
@@ -455,7 +468,7 @@ function emitSpray(dt) {
     const k = 0.5 + skier.brake * 1.2 + skier.skid * 0.1;
     spray.emit(tmp2.x - v.x * 0.03, tmp2.y + 0.03, tmp2.z - v.z * 0.03,
       v.x * 0.45 + side.x * out * k * 2.2, 0.9 + pw * 1.5 + skier.brake * 1.5, v.z * 0.45 + side.z * out * k * 2.2,
-      0.8 + pw * 1.2 + skier.brake * 1.5, Math.ceil(whole / 2), 0.045 + pw * 0.07 + skier.brake * 0.05, 0.5 + pw * 0.8);
+      0.8 + pw * 1.2 + skier.brake * 1.5, Math.ceil(whole / 2), 0.035 + pw * 0.05 + skier.brake * 0.04, 0.45 + pw * 0.7);
   }
 }
 
@@ -528,7 +541,7 @@ function frame() {
       state = 'title';
       cam.mode = 'title'; cam.snap = true;
       ui.veil.classList.add('off');
-      $('cta').textContent = 'press any key to drop in';
+      $('cta').textContent = COARSE ? 'tap to drop in' : 'press any key to drop in';
       window.__ready = true;
       if (Q.get('menu') === '0') begin();
     }
