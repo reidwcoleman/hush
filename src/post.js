@@ -68,6 +68,35 @@ void main() {
 }`,
 };
 
+// god rays: march toward the sun on screen and gather the bright sky that trees and ridges let
+// through
+const SHAFTS = {
+  uniforms: { tDiffuse: { value: null }, uSun: { value: new THREE.Vector2(0.5, 0.5) }, uK: { value: 0 }, uCol: { value: new THREE.Color() }, uThresh: { value: 2.0 }, uAspect: { value: 1.6 } },
+  vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }`,
+  fragmentShader: /* glsl */ `
+uniform sampler2D tDiffuse; uniform vec2 uSun; uniform float uK, uThresh, uAspect; uniform vec3 uCol;
+varying vec2 vUv;
+void main() {
+  vec3 c = texture2D( tDiffuse, vUv ).rgb;
+  if ( uK > 0.001 ) {
+    vec2 d = ( uSun - vUv ) / 24.0;
+    vec2 uv = vUv + d * fract( sin( dot( vUv, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 );
+    float acc = 0.0, w = 1.0;
+    for ( int i = 0; i < 24; i++ ) {
+      uv += d;
+      vec3 s = texture2D( tDiffuse, clamp( uv, 0.0, 1.0 ) ).rgb;
+      float l = dot( s, vec3( 0.3, 0.59, 0.11 ) );
+      acc += smoothstep( uThresh, uThresh * 2.5, l ) * w;
+      w *= 0.94;
+    }
+    vec2 q = ( vUv - uSun ) * vec2( uAspect, 1.0 );
+    float fall = 1.0 / ( 1.0 + dot( q, q ) * 6.0 );
+    c += uCol * ( acc / 24.0 ) * uK * fall;
+  }
+  gl_FragColor = vec4( c, 1.0 );
+}`,
+};
+
 export class Post {
   constructor(renderer, scene, camera) {
     this.renderer = renderer;
@@ -76,6 +105,8 @@ export class Post {
     this.composer = new EffectComposer(renderer, rt);
     this.render = new RenderPass(scene, camera);
     this.composer.addPass(this.render);
+    this.shafts = new ShaderPass(SHAFTS);
+    this.composer.addPass(this.shafts);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.28, 0.65, 2.2);
     this.composer.addPass(this.bloom);
     this.grade = new ShaderPass(GRADE);
@@ -83,6 +114,19 @@ export class Post {
     this.smaa = new SMAAPass(size.x, size.y);
     this.composer.addPass(this.smaa);
     this.u = this.grade.uniforms;
+  }
+
+  // sun: world direction; camera: the view
+  updateShafts(camera, sunDir, color, k) {
+    const u = this.shafts.uniforms;
+    const p = camera.position.clone().addScaledVector(sunDir, 1000).project(camera);
+    const facing = camera.getWorldDirection(new THREE.Vector3()).dot(sunDir);
+    const on = facing > 0 && p.z < 1 ? THREE.MathUtils.smoothstep(facing, 0.3, 0.75) : 0;
+    u.uSun.value.set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5);
+    u.uK.value = on * k;
+    u.uCol.value.copy(color);
+    u.uAspect.value = camera.aspect;
+    this.shafts.enabled = u.uK.value > 0.001;
   }
 
   setSize(w, h, dpr) {

@@ -174,7 +174,14 @@ vTH = position.y;
 #endif`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\n' + SNOWY_HEAD + 'varying float vTH;')
-      .replace('#include <map_fragment>', `#include <map_fragment>
+      .replace('#include <map_fragment>', `
+{
+  // never let a branch fill the lens: dither out right by the camera
+  float cd = length( vAtW - cameraPosition );
+  float dth = fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) );
+  if ( cd < 3.5 && dth > ( cd - 1.2 ) / 2.3 ) discard;
+}
+#include <map_fragment>
 float tSnow;
 {
   vec3 fnW = normalize( cross( dFdx( vAtW ), dFdy( vAtW ) ) );

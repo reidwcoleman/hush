@@ -176,10 +176,10 @@ function std(color, rough = 0.6, metal = 0, extra = {}) {
 }
 
 export const KITS = [
-  { jacket: 0xb4532a, pants: 0x2a3038, helmet: 0xe8e2d6, lens: 0xd48a2a, mitts: 0x23262a, boots: 0x3a3f46, ski: ['#e9e2d4', '#c4562f', '#22262b'] },
-  { jacket: 0x2d5a62, pants: 0xd9d0c0, helmet: 0x1e2227, lens: 0x6aa6d8, mitts: 0x2a2d31, boots: 0xe7e3dc, ski: ['#1f2428', '#e3b04b', '#f1ece2'] },
-  { jacket: 0xe9e3d6, pants: 0x55433a, helmet: 0x8a6b4a, lens: 0xc2662c, mitts: 0x3a2e28, boots: 0x2a2b2e, ski: ['#d9cdb7', '#5d7a6a', '#2a2b2e'] },
-  { jacket: 0x6d7f4e, pants: 0x2b2f2a, helmet: 0xd8d4c9, lens: 0x9a5fc4, mitts: 0x1d1f1c, boots: 0x6d6a62, ski: ['#efe9dd', '#6d7f4e', '#1d1f1c'] },
+  { pack: 0x30373c, jacket: 0xb4532a, pants: 0x2a3038, helmet: 0xe8e2d6, lens: 0xd48a2a, mitts: 0x23262a, boots: 0x3a3f46, ski: ['#e9e2d4', '#c4562f', '#22262b'] },
+  { pack: 0x8a4a2c, jacket: 0x2d5a62, pants: 0xd9d0c0, helmet: 0x1e2227, lens: 0x6aa6d8, mitts: 0x2a2d31, boots: 0xe7e3dc, ski: ['#1f2428', '#e3b04b', '#f1ece2'] },
+  { pack: 0x3a4a3c, jacket: 0xe9e3d6, pants: 0x55433a, helmet: 0x8a6b4a, lens: 0xc2662c, mitts: 0x3a2e28, boots: 0x2a2b2e, ski: ['#d9cdb7', '#5d7a6a', '#2a2b2e'] },
+  { pack: 0xb08a4a, jacket: 0x6d7f4e, pants: 0x2b2f2a, helmet: 0xd8d4c9, lens: 0x9a5fc4, mitts: 0x1d1f1c, boots: 0x6d6a62, ski: ['#efe9dd', '#6d7f4e', '#1d1f1c'] },
 ];
 
 export class Rider {
@@ -243,6 +243,23 @@ export class Rider {
     const gaiter = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.088, 0.13, 20, 1, false), fabric(0x22262a, { rough: 0.95 }));
     gaiter.position.set(0, -0.07, 0.008);
     head.add(gaiter);
+    // a small touring pack
+    const pack = new THREE.Group();
+    B('chest').add(pack);
+    const packMat = fabric(kit.pack ?? 0x2b3136, { rough: 0.85 });
+    const bag = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.4, 0.13, 2, 2, 2), packMat);
+    roundBox(bag.geometry, 0.05);
+    bag.position.set(0, 0.02, -0.17);
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.09, 0.14, 2, 2, 2), packMat);
+    roundBox(lid.geometry, 0.035);
+    lid.position.set(0, 0.23, -0.165);
+    for (const sx of [-1, 1]) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.36, 0.02), std(0x1b1d20, 0.8));
+      strap.position.set(sx * 0.09, 0.03, 0.12);
+      strap.rotation.x = -0.12;
+      pack.add(strap);
+    }
+    pack.add(bag, lid);
     // mitts
     this.mats.mitts = fabric(kit.mitts, { rough: 0.8 });
     this.hands = {};

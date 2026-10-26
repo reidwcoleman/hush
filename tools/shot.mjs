@@ -8,7 +8,7 @@ const page = await browser.newPage({ viewport: { width: W, height: H }, deviceSc
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
 page.on('console', (m) => { if (['error', 'warning'].includes(m.type())) console.log('[' + m.type() + ']', m.text().slice(0, 400)); });
 const t0 = Date.now();
-await page.goto(`http://127.0.0.1:${process.env.PORT ?? 5290}/?fixdpr=1&${q}`, { waitUntil: 'domcontentloaded' });
+await page.goto(`${process.env.URL ?? `http://127.0.0.1:${process.env.PORT ?? 5290}/`}?fixdpr=1&${q}`, { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
 console.log('ready in', ((Date.now() - t0) / 1000).toFixed(1), 's');
 if (process.env.EVAL) await page.evaluate(process.env.EVAL);

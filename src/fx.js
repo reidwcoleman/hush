@@ -115,7 +115,7 @@ export class Tracks {
     g.setIndex(new THREE.BufferAttribute(idx, 1));
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e7);
     this.geo = g;
-    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.62, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.76, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
     m.onBeforeCompile = (sh) => {
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nattribute float aDepth; varying float vDepth; varying vec2 vTUv; varying vec3 vTW2;')
@@ -137,7 +137,7 @@ export class Tracks {
 }`)
         .replace('#include <color_fragment>', `#include <color_fragment>
 float uu = abs( vTUv.x * 2.0 - 1.0 );
-diffuseColor.rgb *= mix( 0.8, 0.97, uu * uu );
+diffuseColor.rgb *= mix( 0.74, 0.93, uu * uu );
 diffuseColor.a = smoothstep( 1.0, 0.7, uu ) * min( 1.0, 0.55 + vDepth );`)
         .replace('#include <fog_fragment>', 'gl_FragColor.rgb = atmosFog( gl_FragColor.rgb, vTW2 );');
       Object.assign(sh.uniforms, { uFogCol: AT.uFogCol, uFogSun: AT.uFogSun, uSunDir: AT.uSunDir, uFogA: AT.uFogA, uFogB: AT.uFogB, uFogBase: AT.uFogBase, uHaze: AT.uHaze });

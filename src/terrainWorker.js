@@ -34,12 +34,18 @@ function buildChunk({ x0, z0, size, res, ox, oy, oz, withProps }) {
 }
 
 // the far grid: dense near its centre, spreading out to the horizon
-function buildFar({ cx, cz, n, span, pw, ox, oy, oz }) {
+function buildFar({ cx, cz, n, span, pw, hole, ox, oy, oz }) {
   const pos = new Float32Array(n * n * 3);
   const nrm = new Float32Array(n * n * 3);
   const dat = new Float32Array(n * n * 2);
   const half = (n - 1) / 2;
-  const warp = (t) => Math.sign(t) * Math.pow(Math.abs(t), pw) * span;
+  // few vertices under the near chunks, most of them just beyond, spreading to the horizon
+  const t0 = 0.12;
+  const warp = (t) => {
+    const a = Math.abs(t);
+    const d = a < t0 ? (hole * a) / t0 : hole + (span - hole) * Math.pow((a - t0) / (1 - t0), pw);
+    return Math.sign(t) * d;
+  };
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const x = cx + warp((i - half) / half), z = cz + warp((j - half) / half);
     const r = Math.hypot(x - cx, z - cz);

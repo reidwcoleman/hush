@@ -26,12 +26,14 @@ function profile(ad) {
 
 // benches that end in a lip and a short steep roll: the natural kickers and drops
 function benches(x, z, ad) {
-  const amp = clamp(F.n2(x * 0.0021 + 40, z * 0.0016) * 1.6 - 0.15, 0, 1) * 5.5 * (1 - smooth(260, 520, ad));
+  // local patches, a hundred metres or two across
+  const amp = clamp(F.n2(x * 0.0042 + 40, z * 0.0036) * 1.9 - 0.45, 0, 1) * 5 * (1 - smooth(240, 480, ad));
   if (amp <= 0.01) return 0;
-  const f = z / 210 + 0.7 * F.n2(x * 0.0035, z * 0.0021 + 9);
+  // the lip wanders and breaks up across the slope
+  const f = z / 190 + 1.5 * F.n2(x * 0.0065, z * 0.0028 + 9) + 0.35 * F.n2(x * 0.02 + 5, z * 0.01);
   const fr = f - Math.floor(f);
   // a bench a little flatter than the fall line, then the edge rolls over and drops
-  return amp * (fr - smooth(0.93, 1.0, fr) - 0.465);
+  return amp * (fr - smooth(0.9, 1.0, fr) - 0.45);
 }
 
 export function heightAt(x, z) {
@@ -72,6 +74,8 @@ export function forestAt(x, z, h, ny) {
   f *= 0.22 + 0.78 * smooth(90, 300, ad);
   f *= 1 - smooth(380, 560, rel);
   f *= smooth(0.72, 0.86, ny);
+  // stands and clumps with open snow between
+  f *= 0.25 + 0.75 * smooth(-0.35, 0.3, F.n2(x * 0.026 + 3, z * 0.026 - 8));
   // the odd lone tree
   f = Math.max(f, 0.05 * smooth(0.82, 0.9, ny) * (1 - smooth(380, 500, rel)));
   return f;
@@ -97,7 +101,8 @@ export function treesIn(x0, z0, size, spacing = 6.5) {
     const h = heightAt(x, z);
     normalAt(x, z, nn, 1.5);
     const f = forestAt(x, z, h, nn.y);
-    if (r > f * 0.55) continue;
+    if (r > f * 0.62) continue;
+    if (nearCabin(x, z)) continue;
     const s = 0.55 + 0.75 * hash2(gi - 5, gj + 13) * (0.6 + 0.4 * f);
     out.push(x, h, z, s, hash2(gi + 3, gj + 7));
   }
@@ -139,4 +144,34 @@ export function meshHeightAt(x, z, step = 2) {
     return fx + fz <= 1 ? ha + (hb - ha) * fx + (hc - ha) * fz : hd + (hc - hd) * (1 - fx) + (hb - hd) * (1 - fz);
   }
   return fz >= fx ? ha + (hd - hc) * fx + (hc - ha) * fz : ha + (hb - ha) * fx + (hd - hb) * fz;
+}
+
+// the cabins: one stretch of valley every PERIOD metres may have one, set back on flat ground
+export const CABIN_PERIOD = 850;
+const cabinCache = new Map();
+export function cabinSite(k) {
+  if (cabinCache.has(k)) return cabinCache.get(k);
+  let out = null;
+  if (hash2(k, 911) >= 0.25) {
+    const z = k * CABIN_PERIOD + 200 + hash2(k, 3) * 400;
+    const side = hash2(k, 7) < 0.5 ? -1 : 1;
+    const nn = { x: 0, y: 1, z: 0 };
+    for (let tries = 0; tries < 10 && !out; tries++) {
+      const off = side * (55 + tries * 14 + hash2(k, tries) * 20);
+      const x = lineX(z) + off;
+      normalAt(x, z, nn, 4);
+      if (nn.y > 0.95) out = { x, z, y: heightAt(x, z), yaw: Math.atan2(-off, 0) + (hash2(k, 5) - 0.5) * 0.6 };
+    }
+  }
+  if (cabinCache.size > 200) cabinCache.clear();
+  cabinCache.set(k, out);
+  return out;
+}
+function nearCabin(x, z) {
+  const k = Math.floor(z / CABIN_PERIOD);
+  for (const kk of [k - 1, k, k + 1]) {
+    const c = cabinSite(kk);
+    if (c && Math.abs(c.x - x) < 14 && Math.abs(c.z - z) < 14) return true;
+  }
+  return false;
 }

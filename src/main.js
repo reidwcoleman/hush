@@ -12,6 +12,8 @@ import { Spray, Tracks, AirSnow } from './fx.js';
 import { Post } from './post.js';
 import { Audio } from './audio.js';
 import { dotTexture } from './textures.js';
+import { Cabins } from './cabins.js';
+import { Birds } from './birds.js';
 
 const Q = new URLSearchParams(location.search);
 const store = {
@@ -87,6 +89,8 @@ const dot = dotTexture();
 const spray = new Spray(scene, dot);
 const tracks = new Tracks(scene);
 const air = new AirSnow(scene, dot);
+const cabins = new Cabins(scene, ORIGIN, dot);
+const birds = new Birds(scene);
 let post = new Post(renderer, scene, camera);
 const audio = new Audio();
 audio.musicOn = store.get('music', true);
@@ -118,6 +122,8 @@ function rebase() {
   terrain.shift(d);
   spray.shift(d);
   tracks.shift(d);
+  birds.shift(d);
+  cabins.place();
   props.update(skier.pos.x + ORIGIN.x, skier.pos.z + ORIGIN.z, true);
 }
 
@@ -203,7 +209,7 @@ function autopilot(dt) {
     }
   }
   const diff = Math.atan2(Math.sin(want - skier.yaw), Math.cos(want - skier.yaw));
-  return { steer: THREE.MathUtils.clamp(diff * 2.2, -1, 1), tuck: sp < 9, brake: sp > 24, jump: false, grab: false };
+  return { steer: THREE.MathUtils.clamp(diff * 2.2, -1, 1), tuck: sp < 4.5, brake: sp > 24, jump: false, grab: false };
 }
 
 // ------------------------------------------------------------------ ui
@@ -345,6 +351,11 @@ function handleKeys() {
     if (c === 'KeyR') { dropIn(skier.pos.z + ORIGIN.z + 400); tracks.lift('L'); tracks.lift('R'); showHint('a fresh line'); }
   }
   pressed.clear();
+  // photo mode: hold [ or ] to move the sun
+  if (photo) {
+    const k = (keys.has('BracketRight') ? 1 : 0) - (keys.has('BracketLeft') ? 1 : 0);
+    if (k) sky.hours += k * 0.02;
+  }
 }
 let hintT = null;
 function showHint(t) {
@@ -471,7 +482,9 @@ function layTracks(dt) {
 function collide() {
   if (skier.wipe > 0) return;
   const p = skier.pos;
-  const hit = props.nearest(p.x + ORIGIN.x, p.z + ORIGIN.z);
+  let hit = props.nearest(p.x + ORIGIN.x, p.z + ORIGIN.z);
+  const cab = cabins.near(p.x + ORIGIN.x, p.z + ORIGIN.z);
+  if (cab && (!hit || cab.d < hit.d)) hit = { ...cab, kind: 'rock', y: -1e9, s: 1e6 };
   nearMissCD -= 1 / 60;
   if (!hit) return;
   const top = hit.kind === 'tree' ? hit.y + 14 * hit.s : hit.y + hit.s * 0.4;
@@ -507,6 +520,7 @@ function frame() {
   const abs = tmp.set(skier.pos.x + ORIGIN.x, 0, skier.pos.z + ORIGIN.z);
   terrain.update(abs.x, abs.z);
   props.update(abs.x, abs.z);
+  cabins.update(abs.x, abs.z);
 
   if (state === 'loading') {
     $('cta').textContent = 'finding the snow · ' + Math.round(terrain.progress() * 100) + '%';
@@ -564,6 +578,10 @@ function frame() {
   air.u.uAmb.value.copy(AT.uFogCol.value).multiplyScalar(0.9);
   spray.uAmb.value.copy(AT.uFogCol.value);
   headlamp.intensity = AT.uNight.value * 40;
+  cabins.glow.value = THREE.MathUtils.smoothstep(-elev, -4, 6);
+  cabins.smokeU.uAmb.value.copy(AT.uFogCol.value);
+  birds.update(dt, skier.pos, cam.dir, THREE.MathUtils.smoothstep(elev, -1, 4) * (1 - sky.overcast));
+  post.updateShafts(camera, AT.uSunDir.value, sky.sun.color, THREE.MathUtils.smoothstep(elev, -1.5, 3) * (1 - THREE.MathUtils.smoothstep(elev, 20, 45) * 0.6) * (1 - sky.overcast) * 0.55);
   post.u.uExposure.value = sky.exposure;
   post.u.uShadowT.value.setRGB(0.95, 1.0, 1.06 + AT.uNight.value * 0.1);
   post.u.uHighT.value.setRGB(1.02, 1.01, 0.95);
@@ -587,4 +605,4 @@ function frame() {
 renderer.compile(scene, camera);
 requestAnimationFrame(frame);
 
-window.__game = { tracks, spray, THREE, nearestTree: (x, z) => props.nearest(x + ORIGIN.x, z + ORIGIN.z), skier, cam, sky, terrain, props, rider: () => rider, ORIGIN, G, renderer, scene, camera, post, setKit, begin, stats, auto };
+window.__game = { cabins, setPhoto, tracks, spray, THREE, nearestTree: (x, z) => props.nearest(x + ORIGIN.x, z + ORIGIN.z), skier, cam, sky, terrain, props, rider: () => rider, ORIGIN, G, renderer, scene, camera, post, setKit, begin, stats, auto };

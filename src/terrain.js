@@ -4,7 +4,7 @@ import { AT, patchAtmos } from './atmos.js';
 
 export const CHUNK = 192;
 const R = 6; // chunks each side of the centre
-const FAR_N = 257, FAR_SPAN = 17000, FAR_PW = 2.25;
+const FAR_N = 321, FAR_SPAN = 17000, FAR_PW = 2.5, FAR_HOLE = 700;
 
 function resFor(d) {
   return d < 280 ? 96 : d < 620 ? 48 : d < 1100 ? 24 : 12;
@@ -97,7 +97,9 @@ export function makeTerrainMaterial(tex, far = false) {
   vec3 rc = tri( uRockC, vTW, bw, 8.0 );
   vec3 rcFar = tri( uRockC, vTW, bw, 64.0 );
   rc = mix( rc, rcFar, smoothstep( 120.0, 600.0, tDist ) );
-  rc = mix( vec3( dot( rc, vec3( 0.33 ) ) ), rc, 0.35 ) * vec3( 0.62, 0.63, 0.66 );
+  rc = mix( vec3( dot( rc, vec3( 0.33 ) ) ), rc, 0.2 ) * vec3( 0.58, 0.6, 0.65 );
+  // weathered streaks down the faces
+  rc *= 0.82 + 0.3 * texture2D( uNoise, vec2( vTW.x + vTW.z, vTW.y * 3.0 ) / 64.0 ).r;
   // snow sticks to the ledges and in the cracks
   tCling = smoothstep( 0.42, 0.62, dot( rc, vec3( 0.4 ) ) + N0.y * 0.55 + ( nB.g - 0.5 ) * 0.4 - 0.25 );
   vec3 snow = vec3( 0.90, 0.925, 0.965 );
@@ -267,14 +269,17 @@ export class Terrain {
       const c = this.chunks.get(this.key(i, j));
       if (!c || (c.res !== res && c.pending !== res)) this.request(i, j, res, d + (c?.mesh ? 400 : 0));
     }
-    // swap the far grid's hole once the whole square is up
+    // swap the far grid's hole once the whole square is up (at the very start, once the inner
+    // rings are: the far grid covers the rest until they land)
     let all = true;
-    for (let j = cj - R; j <= cj + R && all; j++) for (let i = ci - R; i <= ci + R; i++) {
+    const RR = this.shownCenter ? R : 3;
+    for (let j = cj - RR; j <= cj + RR && all; j++) for (let i = ci - RR; i <= ci + RR; i++) {
       const c = this.chunks.get(this.key(i, j));
       if (!c || !c.mesh) { all = false; break; }
     }
-    if (all && (!this.shownCenter || this.shownCenter[0] !== ci || this.shownCenter[1] !== cj)) {
+    if (all && (!this.shownCenter || this.shownCenter[0] !== ci || this.shownCenter[1] !== cj || this.shownR !== RR)) {
       this.shownCenter = [ci, cj];
+      this.shownR = RR;
       for (const [k, c] of this.chunks) {
         if (Math.abs(c.i - ci) > R || Math.abs(c.j - cj) > R) {
           if (c.mesh) { this.group.remove(c.mesh); c.mesh.geometry.dispose(); }
@@ -285,13 +290,13 @@ export class Terrain {
     }
     this.updateBox();
     // the ranges
-    if (!this.farPending && (!this.farCenter || Math.hypot(ax - this.farCenter[0], az - this.farCenter[1]) > 1400)) {
+    if (!this.farPending && (!this.farCenter || Math.hypot(ax - this.farCenter[0], az - this.farCenter[1]) > 420)) {
       this.farPending = true;
       const o = { x: this.origin.x, y: this.origin.y, z: this.origin.z };
       const fc = [ax, az];
       this.queue.push({
         pri: this.far ? 300 : -1,
-        msg: { kind: 'far', cx: ax, cz: az, n: FAR_N, span: FAR_SPAN, pw: FAR_PW, ox: o.x, oy: o.y, oz: o.z },
+        msg: { kind: 'far', cx: ax, cz: az, n: FAR_N, span: FAR_SPAN, pw: FAR_PW, hole: FAR_HOLE, ox: o.x, oy: o.y, oz: o.z },
         done: (r) => {
           const geo = this.makeGeo(r, FAR_N);
           geo.boundingSphere.radius = 1e6;
@@ -311,8 +316,9 @@ export class Terrain {
   updateBox() {
     if (!this.shownCenter) return;
     const [ci, cj] = this.shownCenter;
+    const r = this.shownR ?? R;
     const o = this.origin;
-    this.nearBox.value.set((ci - R) * CHUNK - o.x, (cj - R) * CHUNK - o.z, (ci + R + 1) * CHUNK - o.x, (cj + R + 1) * CHUNK - o.z);
+    this.nearBox.value.set((ci - r) * CHUNK - o.x, (cj - r) * CHUNK - o.z, (ci + r + 1) * CHUNK - o.x, (cj + r + 1) * CHUNK - o.z);
   }
 
   // every chunk in place and the far grid built
